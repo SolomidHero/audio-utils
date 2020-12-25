@@ -1,2 +1,4 @@
 torch
 librosa
+matplotlib
+numpy
