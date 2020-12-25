@@ -27,6 +27,7 @@
 import librosa
 import librosa.display
 
+import torch
 import torchaudio
 import torchaudio.transforms as tf
 
@@ -86,11 +87,14 @@ def wav_to_mel(path=None, wav=None, sr=sample_rate, engine='librosa'):
   if engine == 'librosa':
     return librosa.feature.melspectrogram(wav, sr=sr, **stft_params, **mel_params, power=power)
   elif engine == 'torch':
-    return tf.MelSpectrogram(sample_rate=sr, **stft_params, f_max=mel_params['fmax'], f_min=mel_params['fmin'], power=power)(wav)
+    return tf.MelSpectrogram(sample_rate=sr, **stft_params, f_max=mel_params['fmax'], f_min=mel_params['fmin'], power=power)(
+      torch.from_numpy(wav)
+    )
 
   raise ValueError(engine)
 
 def wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
+  ''' STFT Spectrogram with absolute values '''
   if path is None and wav is None:
     raise ValueError
 
@@ -98,9 +102,9 @@ def wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
     wav, sr = librosa.core.load(path)
 
   if engine == 'librosa':
-    return librosa.feature.melspectrogram(wav, sr=sr, **stft_params, power=power)
+    return np.abs(librosa.stft(wav, **stft_params))
   elif engine == 'torch':
-    return tf.MelSpectrogram(sample_rate=sr, n_mels=n_mels, **stft_params, power=power)
+    return tf.Spectrogram(sample_rate=sr, **stft_params, power=power)(torch.from_numpy(wav))
 
   raise ValueError(engine)
 
