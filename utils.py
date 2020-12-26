@@ -19,9 +19,9 @@
 #   torch   - operates with torch tensors (both cpu and gpu)
 #
 # how it works:
-#    initial                 preprocess                training/inference time
-#    data [wav] (on disk) -> data [specs] (on disk) -> augmented data [features] (in RAM)
-#
+#    initial                 preprocess                    training/inference time
+#    data [wav] (on disk) -> data [specs] (on disk)     -> load data/aug data [features] (in RAM)
+#                            aug data [specs] (on disk)
 
 
 import librosa
@@ -29,10 +29,15 @@ import librosa.display
 
 import torch
 import torchaudio
+
 import torchaudio.transforms as tf
+import audiomentations
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+
+import os
 
 ##############
 # Parameters #
@@ -44,7 +49,7 @@ stft_params = {
   'win_length': 1024,
 }
 power = 1.0
-amplitude_top_db = 80.0
+top_db_level = 80.0
 n_mels = 80
 mel_params = {
   'n_mels': n_mels,
@@ -58,7 +63,7 @@ mel_params = {
 def plot_spec(spec, title='Mel spectrogram', db=True, y_axis='linear'):
   fig = plt.figure(figsize=(14,5))
   if db:
-    spec = librosa.power_to_db(spec, top_db=amplitude_top_db)
+    spec = librosa.power_to_db(spec, top_db=top_db_level)
   librosa.display.specshow(spec, x_axis='time', y_axis=y_axis, cmap='viridis')
 
   plt.colorbar()
@@ -70,19 +75,22 @@ def plot_mel(*args, **kwargs):
   return plot_spec(*args, **kwargs)
 
 def plot_mel_from_wav(path=None, data=None, sr=None, title='Mel spectrogram', db=True):
-  mel = wav_to_mel(path, data, sr)
+  mel = _wav_to_mel(path, data, sr)
   plot_mel(mel, title=title, db=db)
 
 
 ########################
 # Converting functions #
 ########################
-def wav_to_mel(path=None, wav=None, sr=sample_rate, engine='librosa'):
+def _wav_to_mel(path=None, wav=None, sr=sample_rate, augment_fn=None, engine='librosa'):
   if path is None and wav is None:
     raise ValueError
 
   if path is not None:
     wav, sr = librosa.core.load(path)
+
+  if augment_fn is not None:
+    wav = augment_fn(wav)
 
   if engine == 'librosa':
     return librosa.feature.melspectrogram(wav, sr=sr, **stft_params, **mel_params, power=power)
@@ -93,7 +101,7 @@ def wav_to_mel(path=None, wav=None, sr=sample_rate, engine='librosa'):
 
   raise ValueError(engine)
 
-def wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
+def _wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
   ''' STFT Spectrogram with absolute values '''
   if path is None and wav is None:
     raise ValueError
@@ -108,7 +116,7 @@ def wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
 
   raise ValueError(engine)
 
-def spec_to_wav(spec, sr=sample_rate, engine='librosa'):
+def _spec_to_wav(spec, sr=sample_rate, engine='librosa'):
   ''' using Griffin-Lim algorithm '''
 
   if engine == 'librosa':
@@ -118,21 +126,45 @@ def spec_to_wav(spec, sr=sample_rate, engine='librosa'):
 
   raise ValueError(engine)
 
-def mel_to_wav(mel, sr=sample_rate, engine='librosa'):
+def _mel_to_wav(mel, sr=sample_rate, engine='librosa'):
   ''' using Griffin-Lim algorithm '''
 
   if engine == 'librosa':
     return librosa.feature.inverse.mel_to_audio(mel, sr=sr, **stft_params)
   elif engine == 'torch':
-    return spec_to_wav(tf.InverseMelScale(
+    return _spec_to_wav(tf.InverseMelScale(
       n_stft=stft_params['n_fft']//2 + 1, sample_rate=sample_rate, n_mels=n_mels,
       f_max=mel_params['fmax'], f_min=mel_params['fmin'], max_iter=1000
     )(mel), sr=sr, engine=engine)
 
   raise ValueError(engine)
 
-def pitch_shift_wav(wav, shift=0, sr=sample_rate):
-  return librosa.effects.pitch_shift(wav, sr, shift)
+def _to_db(spec, engine='librosa'):
+  if engine == 'librosa':
+    return librosa.power_to_db(spec, top_db=top_db_level)
+  elif engine == 'torch':
+    return tf.AmplitudeToDB('power', top_db=top_db_level)(spec)
+
+def _from_db(db_spec, engine='librosa'):
+  if engine == 'librosa':
+    return librosa.db_to_power(db_spec)
+  elif engine == 'torch':
+    return torch.pow(10.0, db_spec / 10)
+
+
+#################
+# Augmentations #
+#################
+from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift
+
+# apply to:   wav
+# when:       preprocessing
+# results:    augmented data
+_soft_augment_fn = Compose([
+  AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+  PitchShift(min_semitones=-12, max_semitones=12, p=0.5),
+])
+
 
 
 ######################
@@ -141,3 +173,81 @@ def pitch_shift_wav(wav, shift=0, sr=sample_rate):
 # Functions and Classes that use torch API and disk memory to perform
 # - preprocessing before training
 # - additional processing (augmentations) during training/inference
+
+def _find_files(directory, pattern='.wav', use_dir_name=True):
+  '''
+  Find files recursively
+  Args:
+    directory (str): root directory to find
+    pattern (str): query to find
+    use_dir_name (bool): if False, directory name is not included
+  Return:
+    (list): list of found filenames
+  '''
+  files = []
+  for root, dirnames, filenames in os.walk(directory, followlinks=True):
+    for filename in filenames:
+      if filename[-len(pattern):] == pattern:
+        files.append(os.path.join(root, filename))
+  if not use_dir_name:
+    files = [f.replace(directory + '/', '') for f in files]
+  return files
+
+
+def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', engine='librosa'):
+  '''
+  Preprocess each element in dataset with _wav_to_mel
+  and store them on disk with appropriate name
+  '''
+
+  filenames = _find_files(data_root)
+  output_pathes = []
+  features_lengths = []
+
+  if output_root == None:
+    output_root = os.path.dirname(data_root)
+
+  for fname in filenames:
+    output_path = os.path.join(output_root, os.path.basename(fname).replace(pattern, ''))
+
+    # preprocess
+    feature_len = _extract_features(fname, output_path, engine=engine)
+
+    # augment
+    if augment_fn is not None:
+      _extract_features(fname, output_path + '-augmented', augment_fn=augment_fn, engine=engine)
+
+    output_pathes.append(output_path)
+    features_lengths.append(feature_len)
+
+  # save information about data
+  pd.DataFrame(data={
+    'path': output_pathes,
+    'augmented_path': None if augment_fn is None else list(map(lambda x: x + '-augmented', output_pathes)),
+    'size': sorted(features_lengths),
+    'label': 'None'
+  }).sort_values(by=['size']).to_csv(os.path.join(output_root, 'info.csv'))
+
+
+def _extract_features(file_path, output_path=None, augment_fn=None, delta=False, engine='librosa'):
+  '''
+  Preprocess each element in dataset with _wav_to_mel
+  and store them on disk with appropriate name
+  '''
+
+  if engine == 'librosa':
+    mel = _wav_to_mel(file_path, augment_fn=augment_fn, engine=engine)
+  elif engine == 'torch':
+    mel = _wav_to_mel(file_path, augment_fn=augment_fn, engine=engine).numpy()
+
+
+  features = [mel]
+  if delta:
+    features.append(librosa.feature.delta(features[0]))
+  features = np.concatenate(features, axis=0).astype(np.float32)
+
+  if output_path is not None:
+    np.save(output_path, features)
+    return features.shape[1] # time dimension size
+  else:
+    return features

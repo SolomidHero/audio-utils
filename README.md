@@ -5,5 +5,5 @@ Stored in one file to more simple usability.
 
 ## How to use
 ```
-TODO: write fast installation
+TODO: write fast installation guide
 ```
