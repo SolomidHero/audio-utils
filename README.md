@@ -1,7 +1,11 @@
 # Audio processing utils
 
-Audio processing utilities to build and train intelligent systems.
-Stored in one file to more simple usability.
+Audio processing utilities for traininig.
+Implemented in one file for more convenient usability.
+
+This repository will be greatly useful for tasks:
+- Voice Conversion
+- some others without utterences
 
 ## How to use
 ```
