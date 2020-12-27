@@ -28,7 +28,7 @@ TODO: write fast installation guide
 
 Assume, you have data in **`./data/some_data_folder`**. Your steps now consist of:
 ```python
-from utils import _preprocess, PickleDataset
+from utils import preprocess, PickleDataset
 
 preprocess('./data/some_data_folder', pattern='.wav') # creates files in ./data/preprocessed/ with info.csv
 dataset = PickleDataset('./data/preprocessed/info.csv', pattern='.wav') # torch API Dataset
