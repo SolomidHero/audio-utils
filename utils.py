@@ -99,9 +99,10 @@ def _wav_to_mel(path=None, wav=None, sr=sample_rate, augment_fn=None, engine='li
   if engine == 'librosa':
     return librosa.feature.melspectrogram(wav, sr=sr, **stft_params, **mel_params, power=power)
   elif engine == 'torch':
-    return tf.MelSpectrogram(sample_rate=sr, **stft_params, f_max=mel_params['fmax'], f_min=mel_params['fmin'], power=power)(
-      torch.from_numpy(wav)
-    )
+    return tf.MelSpectrogram(
+      sample_rate=sr, **stft_params, n_mels=n_mels,
+      f_max=mel_params['fmax'], f_min=mel_params['fmin'], power=power
+    )(torch.from_numpy(wav))
 
   raise ValueError(engine)
 
@@ -199,7 +200,7 @@ def _find_files(directory, pattern='.wav', use_dir_name=True):
   return files
 
 
-def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, engine='librosa'):
+def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, n_jobs=4, engine='librosa'):
   '''
   Preprocess each element in dataset with _wav_to_mel
   and store them on disk with appropriate name
