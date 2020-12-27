@@ -19,9 +19,9 @@
 #   torch   - operates with torch tensors (both cpu and gpu)
 #
 # how it works:
-#    initial                 preprocess                    training/inference time
-#    data [wav] (on disk) -> data [specs] (on disk)     -> load data/aug data [features] (in RAM)
-#                            aug data [specs] (on disk)
+#   initial                 preprocess                             training/inference time
+#   data [wav] (on disk) -> preprocessed data [specs] (on disk) -> load data/aug data [features] (in RAM)
+#                           augmented data    [specs] (on disk)
 
 
 import librosa
@@ -56,6 +56,7 @@ mel_params = {
   'fmax': 12000,
   'fmin': 0,
 }
+segment_size = 200
 
 ######################
 # Data visualisation #
@@ -168,11 +169,12 @@ _soft_augment_fn = Compose([
 
 
 ######################
-# Dataset processing #
+# Data preprocessing #
 ######################
-# Functions and Classes that use torch API and disk memory to perform
-# - preprocessing before training
-# - additional processing (augmentations) during training/inference
+# Purposes:
+# - preprocess data
+# - augment data
+# - store on disk preprocessed and augmented data
 
 def _find_files(directory, pattern='.wav', use_dir_name=True):
   '''
@@ -205,7 +207,7 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
   features_lengths = []
 
   if output_root == None:
-    output_root = os.path.dirname(data_root)
+    output_root = os.path.join(os.path.abspath(os.path.dirname(data_root)), "preprocessed")
 
   for fname in filenames:
     output_path = os.path.join(output_root, os.path.basename(fname).replace(pattern, ''))
@@ -217,6 +219,8 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
     if augment_fn is not None:
       _extract_features(fname, output_path + '-augmented', augment_fn=augment_fn, engine=engine)
 
+    if feature_len < segment_size:
+      continue
     output_pathes.append(output_path)
     features_lengths.append(feature_len)
 
@@ -251,3 +255,37 @@ def _extract_features(file_path, output_path=None, augment_fn=None, delta=False,
     return features.shape[1] # time dimension size
   else:
     return features
+
+
+###########################
+# Dataset and Dataloading #
+###########################
+# Classes that use torch API and disk memory to effectively perform
+# - loading the data into RAM
+# - slashing all-time input on fixed time segments
+# - additional processing (augmentations) during training/inference
+class PickleDataset(torch.utils.data.Dataset):
+  def __init__(self, csv_path="./preprocessed/info.csv", segment_size=segment_size):
+    super().__init__()
+    self.info = pd.from_csv(csv_path)
+    self.segment_size = segment_size
+
+  def __getitem__(self, i):
+    '''
+    Returns:
+      - segment of preprocessed source (tensor shape (n_mels, segment_size))
+      - segment of augmented source (tensor shape (n_mels, segment_size))
+    '''
+
+    src = np.load(self.info['path'].iloc[i])
+    t, t_aug = np.random.randint(0, src.shape[-1] - self.segment_size, size=2)
+
+    if self.info['augmented_path'].iloc[i] is None:
+      return src[:, t:t + self.segment_size]
+
+    aug_src = np.load(self.info['augmented_path'].iloc[i])
+    return src[:, t:t + self.segment_size], aug_src[:, t_aug:t_aug + self.segment_size]
+
+  def __len__(self):
+    return len(self.info)
+
