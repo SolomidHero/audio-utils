@@ -33,6 +33,7 @@ import torchaudio
 import torchaudio.transforms as tf
 import audiomentations
 
+from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -44,7 +45,7 @@ import os
 ##############
 sample_rate = 16000
 stft_params = {
-  'n_fft':      1024,
+  'n_fft':      2048,
   'hop_length': 256,
   'win_length': 1024,
 }
@@ -53,7 +54,7 @@ top_db_level = 80.0
 n_mels = 80
 mel_params = {
   'n_mels': n_mels,
-  'fmax': 12000,
+  'fmax': sample_rate / 2,
   'fmin': 0,
 }
 segment_size = 200
@@ -88,7 +89,7 @@ def _wav_to_mel(path=None, wav=None, sr=sample_rate, augment_fn=None, engine='li
     raise ValueError
 
   if path is not None:
-    wav, sr = librosa.core.load(path)
+    wav, _ = librosa.core.load(path, sr=None)
 
   if augment_fn is not None:
     wav = augment_fn(wav, sr)
@@ -108,12 +109,12 @@ def _wav_to_spec(path=None, wav=None, sr=sample_rate, engine='librosa'):
     raise ValueError
 
   if path is not None:
-    wav, sr = librosa.core.load(path)
+    wav, _ = librosa.core.load(path, sr=None)
 
   if engine == 'librosa':
     return np.abs(librosa.stft(wav, **stft_params))
   elif engine == 'torch':
-    return tf.Spectrogram(sample_rate=sr, **stft_params, power=power)(torch.from_numpy(wav))
+    return tf.Spectrogram(**stft_params, power=power)(torch.from_numpy(wav))
 
   raise ValueError(engine)
 
@@ -131,10 +132,10 @@ def _mel_to_wav(mel, sr=sample_rate, engine='librosa'):
   ''' using Griffin-Lim algorithm '''
 
   if engine == 'librosa':
-    return librosa.feature.inverse.mel_to_audio(mel, sr=sr, **stft_params)
+    return librosa.feature.inverse.mel_to_audio(mel, sr=sr, **stft_params, power=power)
   elif engine == 'torch':
     return _spec_to_wav(tf.InverseMelScale(
-      n_stft=stft_params['n_fft']//2 + 1, sample_rate=sample_rate, n_mels=n_mels,
+      n_stft=stft_params['n_fft']//2 + 1, sample_rate=sr, n_mels=n_mels,
       f_max=mel_params['fmax'], f_min=mel_params['fmin'], max_iter=1000
     )(mel), sr=sr, engine=engine)
 
@@ -212,7 +213,7 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
   if not os.path.exists(output_root):
     os.mkdir(output_root)
 
-  for fname in filenames:
+  for fname in tqdm(filenames):
     output_path = os.path.join(output_root, os.path.basename(fname).replace(pattern, ''))
 
     # preprocess
@@ -229,8 +230,8 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
 
   # save information about data
   pd.DataFrame(data={
-    'path': output_pathes,
-    'augmented_path': None if augment_fn is None else list(map(lambda x: x + '-augmented', output_pathes)),
+    'path': list(map(lambda x: x + '.npy', output_pathes)),
+    'augmented_path': None if augment_fn is None else list(map(lambda x: x + '-augmented.npy', output_pathes)),
     'size': sorted(features_lengths),
     'label': 'None'
   }).sort_values(by=['size']).to_csv(os.path.join(output_root, 'info.csv'))
@@ -243,9 +244,9 @@ def _extract_features(file_path, output_path=None, augment_fn=None, delta=False,
   '''
 
   if engine == 'librosa':
-    mel = _wav_to_mel(file_path, augment_fn=augment_fn, engine=engine)
+    mel = _to_db(_wav_to_mel(file_path, augment_fn=augment_fn, engine=engine), engine=engine)
   elif engine == 'torch':
-    mel = _wav_to_mel(file_path, augment_fn=augment_fn, engine=engine).numpy()
+    mel = _to_db(_wav_to_mel(file_path, augment_fn=augment_fn, engine=engine), engine=engine).numpy()
 
 
   features = [mel]
@@ -268,10 +269,11 @@ def _extract_features(file_path, output_path=None, augment_fn=None, delta=False,
 # - slashing all-time input on fixed time segments
 # - additional processing (augmentations) during training/inference
 class PickleDataset(torch.utils.data.Dataset):
-  def __init__(self, csv_path="./preprocessed/info.csv", segment_size=segment_size):
+  def __init__(self, csv_path="./preprocessed/info.csv", segment_size=segment_size, return_type='torch'):
     super().__init__()
-    self.info = pd.from_csv(csv_path)
+    self.info = pd.read_csv(csv_path)
     self.segment_size = segment_size
+    self.return_type = return_type
 
   def __getitem__(self, i):
     '''
@@ -283,11 +285,15 @@ class PickleDataset(torch.utils.data.Dataset):
     src = np.load(self.info['path'].iloc[i])
     t, t_aug = np.random.randint(0, src.shape[-1] - self.segment_size, size=2)
 
-    if self.info['augmented_path'].iloc[i] is None:
-      return src[:, t:t + self.segment_size]
+    result = [src[:, t:t + self.segment_size]]
+    if self.info['augmented_path'].iloc[i] is not None:
+      aug_src = np.load(self.info['augmented_path'].iloc[i])
+      result.append(aug_src[:, t_aug:t_aug + self.segment_size])
 
-    aug_src = np.load(self.info['augmented_path'].iloc[i])
-    return src[:, t:t + self.segment_size], aug_src[:, t_aug:t_aug + self.segment_size]
+    if self.return_type == 'torch':
+      result = map(torch.from_numpy, result)
+
+    return tuple(result)
 
   def __len__(self):
     return len(self.info)
