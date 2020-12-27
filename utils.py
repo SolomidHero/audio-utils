@@ -91,7 +91,7 @@ def _wav_to_mel(path=None, wav=None, sr=sample_rate, augment_fn=None, engine='li
     wav, sr = librosa.core.load(path)
 
   if augment_fn is not None:
-    wav = augment_fn(wav)
+    wav = augment_fn(wav, sr)
 
   if engine == 'librosa':
     return librosa.feature.melspectrogram(wav, sr=sr, **stft_params, **mel_params, power=power)
@@ -202,12 +202,15 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
   and store them on disk with appropriate name
   '''
 
-  filenames = _find_files(data_root)
+  filenames = _find_files(data_root, pattern=pattern)
   output_pathes = []
   features_lengths = []
 
   if output_root == None:
     output_root = os.path.join(os.path.abspath(os.path.dirname(data_root)), "preprocessed")
+
+  if not os.path.exists(output_root):
+    os.mkdir(output_root)
 
   for fname in filenames:
     output_path = os.path.join(output_root, os.path.basename(fname).replace(pattern, ''))
