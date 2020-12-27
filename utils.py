@@ -12,7 +12,7 @@
 #   wav  - raw data (array of floats) or path to .wav file (string)
 #   spec - stft spectrogram, (2d array of floats)
 #   mel  - mel spectrogram, (2d array of floats)
-#   db   - db scale of mel or spec (10 * power * log_10(S / ref))
+#   db   - db scale of mel or spec (10 * log_10(S / ref))
 #
 # engines:
 #   librosa - operates with numpy arrays
@@ -39,6 +39,7 @@ import numpy as np
 import pandas as pd
 
 import os
+from joblib import Parallel, delayed
 
 ##############
 # Parameters #
@@ -58,6 +59,7 @@ mel_params = {
   'fmin': 0,
 }
 segment_size = 200
+n_jobs = 4
 
 ######################
 # Data visualisation #
@@ -197,7 +199,7 @@ def _find_files(directory, pattern='.wav', use_dir_name=True):
   return files
 
 
-def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', engine='librosa'):
+def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, engine='librosa'):
   '''
   Preprocess each element in dataset with _wav_to_mel
   and store them on disk with appropriate name
@@ -213,20 +215,39 @@ def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, patter
   if not os.path.exists(output_root):
     os.mkdir(output_root)
 
-  for fname in tqdm(filenames):
-    output_path = os.path.join(output_root, os.path.basename(fname).replace(pattern, ''))
+  output_pathes = list(map(
+    lambda p: os.path.join(output_root, os.path.basename(p).replace(pattern, '')),
+    filenames
+  ))
 
+  if not parallel:
     # preprocess
-    feature_len = _extract_features(fname, output_path, engine=engine)
+    features_lengths = [
+      _extract_features(name, op, engine=engine)
+      for name, op in tqdm(list(zip(filenames, output_pathes)))
+    ]
 
     # augment
     if augment_fn is not None:
-      _extract_features(fname, output_path + '-augmented', augment_fn=augment_fn, engine=engine)
+      for name, op in tqdm(list(zip(filenames, output_pathes))):
+        _extract_features(name, op + '-augmented', augment_fn=augment_fn, engine=engine)
 
-    if feature_len < segment_size:
-      continue
-    output_pathes.append(output_path)
-    features_lengths.append(feature_len)
+  else:
+    # preprocess
+    features_lengths = Parallel(n_jobs=n_jobs)(
+      delayed(_extract_features)(name, op, engine=engine)
+      for name, op in tqdm(list(zip(filenames, output_pathes)))
+    )
+
+    # augment
+    if augment_fn is not None:
+      Parallel(n_jobs=n_jobs)(
+        delayed(_extract_features)(name, op + '-augmented', augment_fn=augment_fn, engine=engine)
+        for name, op in tqdm(list(zip(filenames, output_pathes)))
+      )
+
+  output_pathes = [op for op, fl in zip(output_pathes, features_lengths) if fl >= segment_size]
+  features_lengths = [fl for fl in features_lengths if fl >= segment_size]
 
   # save information about data
   pd.DataFrame(data={
