@@ -167,7 +167,7 @@ from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift
 # results:    augmented data
 _soft_augment_fn = Compose([
   AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
-  PitchShift(min_semitones=-12, max_semitones=12, p=0.5),
+  PitchShift(min_semitones=-6, max_semitones=6, p=0.5),
 ])
 
 
@@ -200,7 +200,7 @@ def _find_files(directory, pattern='.wav', use_dir_name=True):
   return files
 
 
-def _preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, n_jobs=4, engine='librosa'):
+def preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, n_jobs=4, engine='librosa'):
   '''
   Preprocess each element in dataset with _wav_to_mel
   and store them on disk with appropriate name
