@@ -305,12 +305,14 @@ class PickleDataset(torch.utils.data.Dataset):
     '''
 
     src = np.load(self.info['path'].iloc[i])
-    t, t_aug = np.random.randint(0, src.shape[-1] - self.segment_size, size=2)
+    t, t_aug = np.random.randint(0, src.shape[-1] - self.segment_size + 1, size=2)
 
     result = [src[:, t:t + self.segment_size]]
     if self.info['augmented_path'].iloc[i] is not None:
       aug_src = np.load(self.info['augmented_path'].iloc[i])
       result.append(aug_src[:, t_aug:t_aug + self.segment_size])
+
+    result.append(aug_src[:, t:t + self.segment_size])
 
     if self.return_type == 'torch':
       result = map(torch.from_numpy, result)
