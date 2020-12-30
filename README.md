@@ -20,10 +20,6 @@ import sys
 sys.path.append(0, "/content/audio-utils") # path to cloned repository
 ```
 
-```
-TODO: write fast installation guide
-```
-
 ## How to use
 
 Assume, you have data in **`./data/some_data_folder`**. Your steps now consist of:
@@ -33,7 +29,7 @@ from utils import preprocess, PickleDataset
 preprocess('./data/some_data_folder', pattern='.wav') # creates files in ./data/preprocessed/ with info.csv
 dataset = PickleDataset('./data/preprocessed/info.csv', pattern='.wav') # torch API Dataset
 
-# tensor (n_mels, segment_size), tensor (n_mels, segment_size)
+# tensor (n_mels, segment_size), tensor (n_mels, segment_size), tensor (n_mels, segment_size)
 dataset[42]
 ```
 
