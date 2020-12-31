@@ -211,7 +211,7 @@ def preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern
   features_lengths = []
 
   if output_root == None:
-    output_root = os.path.join(os.path.abspath(os.path.dirname(data_root)), "preprocessed")
+    output_root = os.path.abspath(data_root) + "-preprocessed"
 
   if not os.path.exists(output_root):
     os.mkdir(output_root)
@@ -256,7 +256,7 @@ def preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern
     'augmented_path': None if augment_fn is None else list(map(lambda x: x + '-augmented.npy', output_pathes)),
     'size': sorted(features_lengths),
     'label': 'None'
-  }).sort_values(by=['size']).to_csv(os.path.join(output_root, 'info.csv'))
+  }).sort_values(by=['size']).to_csv(os.path.abspath(data_root) + "-info.csv")
 
 
 def _extract_features(file_path, output_path=None, augment_fn=None, delta=False, engine='librosa'):
@@ -291,7 +291,7 @@ def _extract_features(file_path, output_path=None, augment_fn=None, delta=False,
 # - slashing all-time input on fixed time segments
 # - additional processing (augmentations) during training/inference
 class PickleDataset(torch.utils.data.Dataset):
-  def __init__(self, csv_path="./preprocessed/info.csv", segment_size=segment_size, return_type='torch'):
+  def __init__(self, csv_path, segment_size=segment_size, return_type='torch'):
     super().__init__()
     self.info = pd.read_csv(csv_path)
     self.segment_size = segment_size

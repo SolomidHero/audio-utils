@@ -20,14 +20,18 @@ import sys
 sys.path.append(0, "/content/audio-utils") # path to cloned repository
 ```
 
-## How to use
+## Usage
 
 Assume, you have data in **`./data/some_data_folder`**. Your steps now consist of:
 ```python
 from utils import preprocess, PickleDataset
 
-preprocess('./data/some_data_folder', pattern='.wav') # creates files in ./data/preprocessed/ with info.csv
-dataset = PickleDataset('./data/preprocessed/info.csv', pattern='.wav') # torch API Dataset
+# create files in ./data/some_data_folder-preprocessed/
+# and its description ./data/some_data_folder-info.csv
+preprocess('./data/some_data_folder', pattern='.wav')
+
+# create dataset with info.csv file
+dataset = PickleDataset('./data/some_data_folder-info.csv', pattern='.wav') # torch API Dataset
 
 # tensor (n_mels, segment_size), tensor (n_mels, segment_size), tensor (n_mels, segment_size)
 dataset[42]
