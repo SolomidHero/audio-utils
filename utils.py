@@ -256,7 +256,7 @@ def preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern
     'augmented_path': None if augment_fn is None else list(map(lambda x: x + '-augmented.npy', output_pathes)),
     'size': sorted(features_lengths),
     'label': 'None'
-  }).sort_values(by=['size']).to_csv(os.path.abspath(data_root) + "-info.csv")
+  }).sort_values(by=['size']).to_csv(os.path.abspath(output_root) + "-info.csv")
 
 
 def _extract_features(file_path, output_path=None, augment_fn=None, delta=False, engine='librosa'):
@@ -300,8 +300,9 @@ class PickleDataset(torch.utils.data.Dataset):
   def __getitem__(self, i):
     '''
     Returns:
-      - segment of preprocessed source (tensor shape (n_mels, segment_size))
-      - segment of augmented source (tensor shape (n_mels, segment_size))
+      - instance  segment of preprocessed source (tensor shape (n_mels, segment_size))
+      - reference segment of augmented source (tensor shape (n_mels, segment_size))
+      - instance  segment of augmented source (tensor shape (n_mels, segment_size))
     '''
 
     src = np.load(self.info['path'].iloc[i])

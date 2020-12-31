@@ -27,11 +27,11 @@ Assume, you have data in **`./data/some_data_folder`**. Your steps now consist o
 from utils import preprocess, PickleDataset
 
 # create files in ./data/some_data_folder-preprocessed/
-# and its description ./data/some_data_folder-info.csv
+# and its description ./data/some_data_folder-preprocessed-info.csv
 preprocess('./data/some_data_folder', pattern='.wav')
 
-# create dataset with info.csv file
-dataset = PickleDataset('./data/some_data_folder-info.csv', pattern='.wav') # torch API Dataset
+# create dataset with .csv file
+dataset = PickleDataset('./data/some_data_folder-preprocessed-info.csv', pattern='.wav') # torch API Dataset
 
 # tensor (n_mels, segment_size), tensor (n_mels, segment_size), tensor (n_mels, segment_size)
 dataset[42]
