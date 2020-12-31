@@ -22,6 +22,8 @@ sys.path.append(0, "/content/audio-utils") # path to cloned repository
 
 ## Usage
 
+### Python shell
+
 Assume, you have data in **`./data/some_data_folder`**. Your steps now consist of:
 ```python
 from utils import preprocess, PickleDataset
@@ -38,3 +40,9 @@ dataset[42]
 ```
 
 Now with this dataset you can pass it wherever to obtain dataloader, subsets, etc.
+
+### As preprocessing script
+
+```bash
+python3 preprocess.py --data_root=./data/some_data_folder --pattern=.wav --n_jobs=4 --engine=torch
+```
