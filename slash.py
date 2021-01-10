@@ -20,6 +20,7 @@ def get_args():
 
   parser.add_argument('--maxlen', default=10., type=float, help='Maximum length of segment (in seconds)', required=False)
   parser.add_argument('--drop_last', action='store_true', help='Whether to drop last incomplete segment', required=False)
+  parser.add_argument('--rate', default=None, type=int, help='Resample audio before slashing', required=False)
 
   args = parser.parse_args()
   return args
@@ -35,6 +36,11 @@ def main():
     dirname = dirname if args.output_root is None else args.output_root
 
     y, sr = librosa.core.load(file_path, sr=None)
+
+    # resample if specified
+    if args.rate is not None:
+      y = librosa.core.resample(y, sr, args.rate)
+      sr = args.rate
 
     # slash wav into segments
     timings, wavs = _slash_wav(y, sr, maxlen=args.maxlen, drop_last=args.drop_last, timings=True)
