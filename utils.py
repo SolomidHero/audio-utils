@@ -219,14 +219,14 @@ def _slash_wav(wav, sr, maxlen=10, drop_last=False, timings=False):
   '''
 
   ticks = np.arange(0, len(wav), sr * maxlen, dtype=int)
-  timings = np.arange(0, len(wav) / sr, sr * maxlen, dtype=int)
-  segments = wav.split(ticks[1:])
+  times = np.arange(0, len(wav) / sr, maxlen, dtype=int)
+  segments = np.split(wav, ticks[1:])
 
   if len(segments[-1]) == 0 or (drop_last and len(segments[-1]) < int(sr * maxlen)):
     segments = segments[:-1]
 
   if timings:
-    return timings[:len(segments)], segments
+    return times[:len(segments)], segments
   return segments
 
 

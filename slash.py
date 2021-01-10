@@ -7,18 +7,19 @@
 import argparse
 import os
 import librosa
+import scipy
 from utils import _slash_wav
 
 def get_args():
   parser = argparse.ArgumentParser(description='break a single audio file into segments')
 
-  parser.add_argument('file', metavar='filepath', type=str, help='Path to audio file')
+  parser.add_argument('file', metavar='filepath', type=str, nargs='+', help='Path to audio file')
   parser.add_argument('--output_root', default=None, type=str,
     help='Path to store slashed audios (default: same dirictory)', required=False
   )
 
   parser.add_argument('--maxlen', default=10., type=float, help='Maximum length of segment (in seconds)', required=False)
-  parser.add_argument('--drop_last', default=False, type=bool, help='Whether to drop last incomplete segment', required=False)
+  parser.add_argument('--drop_last', action='store_true', help='Whether to drop last incomplete segment', required=False)
 
   args = parser.parse_args()
   return args
@@ -40,11 +41,10 @@ def main():
 
     # output into corresponding files
     for timing, wav in zip(timings, wavs):
-      librosa.output.write_wav(
-        os.path.join(dirname, filename + '_' + timing + 's' + file_extension),
-        wav,
+      scipy.io.wavfile.write(
+        str(os.path.join(dirname, filename + '_' + str(timing) + 's' + file_extension)),
         sr,
-        norm=False
+        wav,
       )
 
 
