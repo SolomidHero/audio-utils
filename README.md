@@ -43,6 +43,14 @@ Now with this dataset you can pass it wherever to obtain dataloader, subsets, et
 
 ### As preprocessing script
 
+Preprocessing dataset:
 ```bash
 python3 preprocess.py --data_root=./data/some_data_folder --pattern=.wav --n_jobs=4 --engine=torch
+```
+
+Slashing audio into piecies:
+```bash
+python3 slash.py --maxlen 1 --drop_last True file1 file2.wav
+# file1     -> file1_0s,     file1_1s, ...
+# file2.wav -> file2_0s.wav, file2_1s.wav, ...
 ```
