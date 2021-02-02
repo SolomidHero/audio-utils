@@ -157,19 +157,26 @@ def _from_db(db_spec, engine='librosa'):
     return torch.pow(10.0, db_spec / 10)
 
 
-#################
-# Augmentations #
-#################
+###################
+# Transformations #
+###################
+# Here defined transformations of source wav
+# to perform preprocessing and augmentations
 from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift
 
 # apply to:   wav
-# when:       preprocessing
-# results:    augmented data
+# when:       augmentation in preprocessing stage
+# results:    wav
 _soft_augment_fn = Compose([
   AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
   PitchShift(min_semitones=-6, max_semitones=6, p=0.5),
 ])
 
+# apply to:   wav path
+# when:       preprocessing
+# results:    mel
+def _feature_extractor_fn(file_path, augment_fn=None, engine='librosa'):
+  return _to_db(_wav_to_mel(file_path, augment_fn=augment_fn, engine=engine), engine=engine)
 
 
 ######################
@@ -198,6 +205,36 @@ def _find_files(directory, pattern='.wav', use_dir_name=True):
   if not use_dir_name:
     files = [f.replace(directory + '/', '') for f in files]
   return files
+
+
+def _slash_wav(wav, sr, maxlen=10, drop_last=False, start_pos=0., n_parts=-1, return_timings=False):
+  '''
+  Break wav into segments
+
+  Args:
+    wav, sr         - wav array (first dim is time) and its sampling rate
+    maxlen          - maximum length of segment in seconds
+    drop_last       - if last incomplete segment should be dropped
+    start_pos       - time (in seconds) from where to start slashing
+    n_parts         - maximum total number of segments (should be more than 0)
+    return_timings  - return corresponding start_pos of each segments
+  Returns:
+    list of wavs    - segments
+  '''
+
+  ticks = np.arange(sr * start_pos, len(wav), sr * maxlen, dtype=int)
+  times = np.arange(start_pos, len(wav) / sr, maxlen, dtype=int)
+  segments = np.split(wav, ticks[1:])
+
+  if len(segments[-1]) == 0 or (drop_last and len(segments[-1]) < int(sr * maxlen)):
+    segments = segments[:-1]
+
+  if n_parts > 0 and isinstance(n_parts, int):
+    segments = segments[:n_parts]
+
+  if return_timings:
+    return segments, times[:len(segments)]
+  return segments
 
 
 def preprocess(data_root, output_root=None, augment_fn=_soft_augment_fn, pattern='.wav', parallel=False, n_jobs=4, engine='librosa'):
@@ -265,11 +302,9 @@ def _extract_features(file_path, output_path=None, augment_fn=None, delta=False,
   and store them on disk with appropriate name
   '''
 
-  if engine == 'librosa':
-    mel = _to_db(_wav_to_mel(file_path, augment_fn=augment_fn, engine=engine), engine=engine)
-  elif engine == 'torch':
-    mel = _to_db(_wav_to_mel(file_path, augment_fn=augment_fn, engine=engine), engine=engine).numpy()
-
+  mel = _feature_extractor_fn(file_path, augment_fn=augment_fn, engine=engine)
+  if engine == 'torch':
+    mel = mel.numpy()
 
   features = [mel]
   if delta:
