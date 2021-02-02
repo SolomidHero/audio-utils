@@ -1,5 +1,5 @@
 # slash.py
-# _slash_wav function from utils.py as standalone script
+# _slash_wav function from utils.py as a standalone script
 # apply:      to a single file
 # creates:    filename_0s.wav, filename_10s.wav, ...
 
@@ -22,6 +22,9 @@ def get_args():
   parser.add_argument('--drop_last', action='store_true', help='Whether to drop last incomplete segment', required=False)
   parser.add_argument('--rate', default=None, type=int, help='Resample audio before slashing', required=False)
 
+  parser.add_argument('-s', '--start', default=0., type=float, help='Start position for processing', required=False)
+  parser.add_argument('-N', '--n_parts', default=-1, type=int, help='Total number of resulting segments (could be less)', required=False)
+
   args = parser.parse_args()
   return args
 
@@ -43,7 +46,14 @@ def main():
       sr = args.rate
 
     # slash wav into segments
-    timings, wavs = _slash_wav(y, sr, maxlen=args.maxlen, drop_last=args.drop_last, timings=True)
+    wavs, timings = _slash_wav(
+      y, sr,
+      maxlen=args.maxlen,
+      drop_last=args.drop_last,
+      start_pos=args.start,
+      n_parts=args.n_parts,
+      return_timings=True,
+    )
 
     # output into corresponding files
     for timing, wav in zip(timings, wavs):

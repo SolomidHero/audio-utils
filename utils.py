@@ -207,26 +207,33 @@ def _find_files(directory, pattern='.wav', use_dir_name=True):
   return files
 
 
-def _slash_wav(wav, sr, maxlen=10, drop_last=False, timings=False):
+def _slash_wav(wav, sr, maxlen=10, drop_last=False, start_pos=0., n_parts=-1, return_timings=False):
   '''
   Break wav into segments
 
   Args:
-    wav, sr      - wav array (first dim is time) and its sampling rate
-    maxlen       - maximum length of segment in seconds
+    wav, sr         - wav array (first dim is time) and its sampling rate
+    maxlen          - maximum length of segment in seconds
+    drop_last       - if last incomplete segment should be dropped
+    start_pos       - time (in seconds) from where to start slashing
+    n_parts         - maximum total number of segments (should be more than 0)
+    return_timings  - return corresponding start_pos of each segments
   Returns:
-    list of wavs - segments
+    list of wavs    - segments
   '''
 
-  ticks = np.arange(0, len(wav), sr * maxlen, dtype=int)
-  times = np.arange(0, len(wav) / sr, maxlen, dtype=int)
+  ticks = np.arange(sr * start_pos, len(wav), sr * maxlen, dtype=int)
+  times = np.arange(start_pos, len(wav) / sr, maxlen, dtype=int)
   segments = np.split(wav, ticks[1:])
 
   if len(segments[-1]) == 0 or (drop_last and len(segments[-1]) < int(sr * maxlen)):
     segments = segments[:-1]
 
-  if timings:
-    return times[:len(segments)], segments
+  if n_parts > 0 and isinstance(n_parts, int):
+    segments = segments[:n_parts]
+
+  if return_timings:
+    return segments, times[:len(segments)]
   return segments
 
 
