@@ -222,9 +222,9 @@ def _slash_wav(wav, sr, maxlen=10, drop_last=False, start_pos=0., n_parts=-1, re
     list of wavs    - segments
   '''
 
-  ticks = np.arange(sr * start_pos, len(wav), sr * maxlen, dtype=int)
+  ticks = np.arange(0, len(wav) - sr * start_pos, sr * maxlen, dtype=int)
   times = np.arange(start_pos, len(wav) / sr, maxlen, dtype=int)
-  segments = np.split(wav, ticks[1:])
+  segments = np.split(wav[sr * start_pos:], ticks[1:])
 
   if len(segments[-1]) == 0 or (drop_last and len(segments[-1]) < int(sr * maxlen)):
     segments = segments[:-1]
