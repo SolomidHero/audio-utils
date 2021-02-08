@@ -22,7 +22,7 @@ def get_args():
   parser.add_argument('--drop_last', action='store_true', help='Whether to drop last incomplete segment', required=False)
   parser.add_argument('--rate', default=None, type=int, help='Resample audio before slashing', required=False)
 
-  parser.add_argument('-s', '--start', default=0., type=float, help='Start position for processing', required=False)
+  parser.add_argument('-s', '--start', default=0., type=float, help='Start position for processing (in seconds)', required=False)
   parser.add_argument('-N', '--n_parts', default=-1, type=int, help='Total number of resulting segments (could be less)', required=False)
 
   args = parser.parse_args()
