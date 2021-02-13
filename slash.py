@@ -58,7 +58,7 @@ def main():
     # output into corresponding files
     for timing, wav in zip(timings, wavs):
       scipy.io.wavfile.write(
-        str(os.path.join(dirname, filename + '_' + str(timing) + 's' + file_extension)),
+        str(os.path.join(dirname, filename + '_' + str(timing) + 's.wav')),
         sr,
         wav,
       )
